@@ -1,0 +1,272 @@
+//-----------------------
+strdef prefix, postfix
+prefix="BC2_230330_"
+postfix="control"
+//-----------------------
+
+objref PC
+PC= new ParallelContext()
+PC.nthread(64)
+
+
+
+load_file("stdgui.hoc")
+//create a network of 200 unconnected cells
+ncell = 200
+load_file("BC2_network_template_220727.hoc")
+
+access BC[0].soma
+soma_surface_area = area(0.5)
+
+RNG_seed = 3486 //676
+IPSG_reversal = -75
+IPSGsyn= 0.0076 //7.6 nS
+stoptime = 1200
+
+number_of_synapse=30
+E_frequency=100
+
+apicalCompart=92
+dborder=120
+objref random_I, mx
+mx = new Random(386)
+RNG_seed= mx.discunif(1, 999)
+random_I= new Random (RNG_seed)
+
+//for a=0, ncell-1 {BC[a].soma nseg=1}
+
+/*
+****************************************************************************************************************************************************************************
+*																					   *
+*                                                                       Assign synapses and gap junction block                                                                 *
+*																					   *
+****************************************************************************************************************************************************************************
+*/
+
+
+
+//insert inhibitory synapses
+
+xopen("BC_build_inhibitory_synapses_221122.hoc")
+
+// insert gap junctions
+
+xopen("BC_build_gap_junctions_230119.hoc")
+
+
+xopen("Poission EPSP to basal dendrites_250901.hoc")
+
+
+//disconnect() and connect() are two functions that change the synaptic weight between BCs
+
+proc disconnect_BCs() {for d = 0, IPSC_number-1 presyn[d].weight=0  //IPSC_number must subtract 1 because it starts from 0
+		       for a=0, number_of_gap*2-1 gap[a].r=1e+10
+					
+ 		 }
+
+proc connect_BCs() {for d=0, IPSC_number-1 {presyn[d].weight=IPSGsyn}
+		    for a=0, number_of_gap*2-1 gap[a].r=(1e+3)*5 ////Galarreta and Hestrin, 2002, PNAS (0.2 nS = 5e+3 megaohms)
+		   }
+
+
+
+
+
+//-------------------------------------------------------------------------  end of block -----------------------------------------------------------------
+
+
+
+
+
+
+
+
+
+/*
+****************************************************************************************************************************************************************************
+*																					   *
+*                                                                       Assign inputs and simulation block                                                                 *
+*																					   *
+****************************************************************************************************************************************************************************
+*/
+objref I_array[ncell]
+
+
+
+connection_on=0
+
+objref Random_list, Active_synapse_list
+Random_list= new Random()
+
+proc generate_active_synapse_list() {local i
+					Active_synapse_list=new Vector(200, -1000)
+					count=0
+while (count<=$1) {i=Random_list.discunif(0, 199)
+while (Active_synapse_list.x[i]==0) {i=Random_list.discunif(0, 199)}
+//print i
+Active_synapse_list.x[i]=0
+count=count+1}
+}
+
+proc simulate() {local i1
+		 init()
+		 make_Poisson_input($1, $2)
+		 total_duration=stoptime/dt
+		 sample=0
+		 disconnect_BCs()
+		 connection_on=0
+		 progress = 10
+                 while (sample<total_duration) {if (sample>2000)  {if (connection_on==0) {connect_BCs() connection_on=1}}
+						
+						if (sample<200/dt) {
+						for i1=0, ncell-1 {if (Drive_on_tag.x[i1]==0) {if (Drive_on_list.x[i1]<sample) {generate_active_synapse_list(Number_of_active_synpase_each_cell.x[i1])
+																										for i2=0, Active_synapse_list.size-1 {if (Active_synapse_list.x[i2]==0) {Poisson_synapse_net[i1][i2].weight=(5e-4)*1}}
+																										Drive_on_tag.x[i1]=1}}}
+						}
+				 
+						fadvance() 
+						sample=sample+1 
+						if (sample>progress/100*total_duration) { print "trial ", xx, ", ", progress, "% progress" progress=progress+10}
+
+						//print sample
+						}
+				
+		
+		 
+		 
+		 }
+
+proc init() {tstop = stoptime
+	    finitialize (-70)
+	    register_AP()
+	    dt =0.1 }
+
+
+//---------------------------------------------------------------------------------End of block------------------------------------------------------------------------------------
+
+
+/*
+****************************************************************************************************************************************************************************
+*																					   *
+*                                                                      File output block                                         		                           *
+*																					   *
+****************************************************************************************************************************************************************************
+*/
+strdef f_name
+objref IO
+
+
+
+objref AP, APtime[ncell], recAP[ncell]
+proc register_AP() {AP = new Vector(ncell*1000, 0)
+		    for a=0, ncell-1 {access BC[a].soma
+				      recAP[a]=new Vector()
+				      APtime[a] = new APCount(0.5)
+				      APtime[a].thresh =0
+				      APtime[a].record(recAP[a])}
+		    }
+
+
+proc write_AP() {for a=0, ncell-1 {for b=0, recAP[a].size-1{AP.x[a*1000+b]=recAP[a].x[b]} //each cell occupies 1000 row in the APtiming file.
+				   }
+		
+		 $o2 = new File()
+		 $o2.wopen($s1)
+		 AP.printf($o2)
+		 $o2.close
+		 }
+
+proc make_output_I()    {$o2 = new File()
+		       $o2.wopen($s1)
+		       I_array.printf($o2)
+		       $o2.close}
+
+//---------------------------------------------------------------------------------End of block------------------------------------------------------------------------------------
+
+BC2_rheobase=-0.05 //at -.05 uA, 50 Hz input can discharge BC2s
+
+objref bias[ncell]
+proc make_input(){
+I_array= new Vector(ncell,0)
+for a=0, ncell-1 {access BC[a].soma
+				  bias[a]= new IClamp(0.5)
+				  random_delay=random_I.normal(50,50*50*.3*.3)
+				  while ((random_delay<0)||(random_delay>=200)) {random_delay=random_I.normal(50,50*50*.3*.3)}
+				  bias[a].del=random_delay*0
+				  bias[a].dur=stoptime
+				  bias[a].amp=.25
+				  //i_amp = random_I.normal($1, $1*$1*$2*$2)
+				 // while (i_amp<0) {i_amp = random_I.normal($1, $1*$1*$2*$2)}
+				  i_amp = random_I.normal(BC2_rheobase, BC2_rheobase*BC2_rheobase*$2*$2)
+				  bias[a].amp=  i_amp //+BC2_rheobase-i_amp
+				  I_array.x[a]=i_amp
+				//print i_amp, "---------------------------", random_delay 
+			}
+
+                print "----------------------------------------------------------------------------------------------------------------"
+}
+
+for (zz=.5; zz<=2.2;zz=zz+0.05){
+
+for (yy=0.05; yy<=0.5; yy=yy+0.05) {
+
+for xx=0, 0 {
+	     print dend_number
+		 
+		 make_input(0,yy)
+		
+	     simulate(zz*100, yy)
+	     
+	     
+
+	     sprint (f_name, "%s%g%s%g%s%g%s", "230330_Drive_", zz,"_BC2_Idrive_control_var_", yy,"_trial_", xx, ".txt")
+	     //make_output_I(f_name, IO)
+
+	     sprint (f_name, "%s%g%s%g%s%g%s", "230330_Drive_",zz,"_BC2_APtime_control_var_", yy,"_trial_", xx, ".txt")
+
+	     write_AP(f_name, IO)
+		 
+		 total_APs=0
+		 for i1=0,ncell-1{total_APs=total_APs+recAP[i1].size}
+		 print total_APs, "<--->", zz, "<--->", yy
+		 
+	    // print f_name
+	    }
+
+
+
+}
+}
+
+/*
+****************************************************************************************************************************************************************************
+*																					   *
+*                                                                      Display graph  block                                                                 *
+*																					   *
+****************************************************************************************************************************************************************************
+*/
+
+
+/*
+objref g, g1
+strdef graphname
+proc display() {g = new Graph()
+		
+		addplot (g, 0)
+		g.size (0, stoptime, -90, 50)
+
+		for a=0, ncell-1 {sprint (graphname, "%s%g%s", "BC[", a, "].soma.v(0.5)")
+     		          //print graphname
+		g.addvar(graphname, 3,1, 0.6, 0.9, 2)}
+		
+		g1 = new Graph()
+		addplot (g1, 0)
+		g1.size (0, stoptime, -76, -70)
+		g1.addvar("cell.soma.v(0.5)", 3,1, 0.6, 0.9, 2)
+		}
+*/
+
+
+//---------------------------------------------------------------------------------End of block------------------------------------------------------------------------------------
+
+PC.done()
