@@ -1,0 +1,397 @@
+//Simulation of BC4
+
+load_file("stdgui.hoc")
+// number of apical dendritic compartments 
+apicalCompart = 662  // 663 for AN BC1
+//number of axonal compartment
+axonCompart = 2418 //total 2419 axonal compartment
+//number of basal dendritic compartment
+basalCompart= 70 //total 71 compartments
+
+stoptime = 1100
+tstop = stoptime
+number_of_synapse = 5 //number of excitatory synpases
+number_of_inhibitory_synapse =12 //number of inhibitory synapses 12
+E_frequency = 100
+I_frequency = 100
+RNG_seed = 4167
+
+
+
+   celsius = 6.3	// C - temperature 
+// temperature has no real meaning in the simulations 
+// this is the def.temp in Neuron (HH. model)
+// timeconstants of m, h and n are adjusted directly in the mod file
+
+
+
+
+//--------------------------------------------------------------------------
+
+
+
+Vleak = -64
+Vrest = -64
+axialresist = 137 // axial resistivity based on AN 2010 PNAS units ohm cm, Ri= 172.1 (Table S3)
+membranecap = 1.06 // membrane capacity based on AN 2010 PNAS units: uF cm-2
+dborder = 120  // 120 micrometers is border between proximal and distal dendrites, define distal versus proximal dendrites
+
+
+// load the passive cable model
+// topol() is not used, because this function has been embedded in the passive model hoc file and executed during loading
+xopen ("DG-BasketCell4.hoc")
+
+// define the number of segments, based on the Nseg_BC2.txt. This proc is embedded in the passive model hof file.
+secdef()
+
+
+// define pas, Ra and cm in all compartments
+forall {insert hh_wbm gnabar_hh_wbm=0 gkbar_hh_wbm=0 gl_hh_wbm=1/6400} //Na+ and K+ conductances are initially set to 0.
+//the leak condutance was 1e-4 S cm-2 (10 Kohm cm2, Hu and Jonas 2014).
+forall {el_hh_wbm = -70}  //Defined the reversal potential of the leak conductance (defining the RMP).
+forall {Ra = axialresist cm =membranecap}
+
+
+
+
+//-------------------------------
+soma distance (0, 0.5) // use soma as the reference point
+forsec "apic" for (x) if ((x!=0) && (x!=1)) {dis = distance (x)
+					     if (dis <= dborder) {gl_hh_wbm (x)= 1/6400}  else {gl_hh_wbm(x) = 1/12700}
+										    
+					    }
+
+forsec "dend" for (x) if ((x!=0) && (x!=1)) {dis = distance (x)
+					     if (dis <= dborder) {gl_hh_wbm (x)= 1/6400}  else {gl_hh_wbm(x) = 1/12700}
+					    }
+
+
+//-------------------------------------
+
+
+
+
+
+//define the WB K+ conductance density 
+forall {gkbar_hh_wbm= 150e-4} //A uniform density of 500e-4 mho cm-2, corresponding to 50 mS cm-2 (Hu and Jonas, 2010, Science)
+
+//defines the WB Na+ conductance density in the soma
+access soma
+gnabar_hh_wbm= 1000e-4//correspoding to 100 mS cm-2 at the soma
+
+//defines the WB Na+ conductance density in dendrites
+
+soma distance (0, 0.5)
+for a=0, apicalCompart {access apic[a]
+	     gnabar_hh_wbm = 50e-4 //distal dendrites, Na+ conductance 5 ms cm-2
+	     for (x) {dis = distance(x)
+             if (dis<dborder) {gnabar_hh_wbm(x)=500e-4}}// proximal dendrites, Na+ conductance 50 ms cm-2
+            }
+
+for a=0, basalCompart {access dend[a]
+	     gnabar_hh_wbm = 50e-4
+	     for (x) {dis = distance(x)
+             if (dis<dborder) {gnabar_hh_wbm(x)=500e-4}}
+            }
+
+
+//find the shortest distance from the soma to the axon
+axondistance = 0
+axonlocation  =0
+soma distance (0, 0.5)
+for a=0, axonCompart {access axon[a]
+	      dis = distance(0.5)
+
+					     if (dis > axondistance) {axondistance =dis 
+								      axonlocation =a}
+					     }
+print axondistance 
+
+//axon[0] = 40 micrometers from the cell body
+
+//calulate the slope of axonal Na+ conductance density as a function of distance
+gNa_slope = ((2000e-4)-(1500e-4))/axondistance //Na+ condutance in the axon increases form 150 mS to 200 mS in a linear fashion.
+
+//define the WB Na+ conductance density in the axon
+
+
+for a=0, axonCompart {access axon[a]
+	      dis = distance(0.5)
+              gnabar_hh_wbm= (dis*gNa_slope)+(1500e-4) 	}			    					    
+
+
+
+
+
+
+proc init() {
+	    finitialize (-70)
+	    dt =0.1 }
+/*
+objref g
+g = new Graph()
+addplot (g, 0)
+g.size (0, stoptime, -90, 50)
+g.addvar("soma.v(0.5)", 1,1, 0.6, 0.9, 2)
+g.addvar("axon[0].v(0.01)", 2,1, 0.6, 0.9, 2)
+g.addvar("apic[400].v(0.01)", 2,1, 0.6, 0.9, 2)
+*/
+strdef graphname
+
+//build random excitatory synapses in distal apical dendrites
+print "Assign random synapses"
+objref synapse[number_of_synapse] 
+a = 0
+objref synapse_segment, synapse_location, random_segment, random_location
+random_segment = new Random(RNG_seed)
+random_location = new Random(RNG_seed)
+
+//create a edrive stimulation protocol to activate the exciatory synapse 
+objref edrive
+apic[apicalCompart] edrive = new NetStimm(0.5)
+edrive.number = 1e+10
+edrive.start = 100
+edrive.noise= 1 
+edrive.interval =1000/E_frequency
+objref enc[number_of_synapse]//enc is the NetCon target for the edrive
+
+
+
+
+//build a function to randomly assign (number_of_synapse) to distal dendrites
+proc build_excitatory_synapses() {
+
+
+objref synapse[number_of_synapse] 
+objref enc[number_of_synapse]//enc is the NetCon target for the edrive
+//make_synapse and make variables are used exclusively in this function
+make_synapse=0
+synapse_segment = new Vector(number_of_synapse, 0) //range 0 to number_of_synapse-1
+synapse_location = new Vector(number_of_synapse, 0)
+tag = 0
+//print "test3"
+print "                                                                             "
+print "Distances of excitatory inputs"
+while (make_synapse<number_of_synapse) {apical_segment = random_segment.discunif(0, apicalCompart)
+			      apical_location = random_location.discunif(1, 99)/100
+			      soma distance(0, 0.5)
+			      access apic[apical_segment]
+                              dis = distance (apical_location)
+                              //print apical_segment, synapse_segment.x[make_synapse], dis
+                              if (dis > dborder) {for count= 0, make_synapse {if (apical_segment==synapse_segment.x[count]) {tag = 1} //check whether the input targets the same dendritic branch
+							          //if there are redundancies, tag is set to 1
+								   }
+						  //print tag
+                                                  if (tag != 1) {synapse_segment.x[make_synapse]=apical_segment  
+					                       	synapse_location.x[make_synapse]=apical_location
+								
+								print dis
+							        make_synapse = make_synapse+1}
+
+						  }		
+                    
+                                          	tag = 0
+			      }
+
+print "Location of synapses: apical segment, position inside the segment"
+for make_synapse=0, number_of_synapse-1 {print synapse_segment.x[make_synapse], synapse_location.x[make_synapse]}
+
+//Build synapses
+for make=0, number_of_synapse-1 {        //print "test"
+					 access apic[synapse_segment.x[make]]
+					 //print "test2"
+			     		 synapse[make]= new Exp2Syn(synapse_location.x[make])
+			      		 synapse[make].e=0
+			      		 synapse[make].tau1=0.14
+			      		 synapse[make].tau2=0.77  
+					 enc[make] = new NetCon(edrive, synapse[make], 0, 0, 0) //the excitatory synapse will be activated when the value of edrive is higher than 0, with a delay of 0 ms
+					 enc[make].weight=(5e-4)
+					 }
+//connect these synapses to a NetCon for producing inputs
+//make a new graph()
+//g == None
+
+/*
+objref g
+g = new Graph()
+addplot (g, 0)
+g.size (0, stoptime, -90, 50)
+g.addvar("soma.v(0.5)", 1,1, 0.6, 0.9, 2)
+
+
+for make=0, number_of_synapse-1 {sprint (graphname, "%s%g%s%g%s", "apic[",synapse_segment.x[make], "].v(", synapse_location.x[make], ")")
+     				 print graphname
+				 g.addvar(graphname, make,1, 0.6, 0.9, 2)
+				 }
+
+*/
+ 
+}
+
+//add an inhibitory synapse to the soma
+objref Isynapse, idrive, inc
+access soma
+soma_surface_area = area(0.5) //unit is um2, obtain the area of the somatic membrane
+proc build_inhibitory_synapses() {access soma
+						Isynapse = new shunt(0.5)
+							Isynapse.del=0
+							Isynapse.dur=tstop
+							Isynapse.e=-75
+							Isynapse.g=0.0031/20*number_of_inhibitory_synapse*1000 //*1000 is because the conductance in shunt.mod is ns when compared to NetCon (uS)
+					 /*Isynapse = new Exp2Syn(0.5)
+				 Isynapse.e= -75 //the reversal potential is -75 mV
+                                 Isynapse.tau1 = 0.17 //defines the time constant of the IPSG upstroke
+                                 Isynapse.tau2= 1.8 //defines the time constant of the ISPG downstroke. These values are based on Bartos and Jonas (2001) J Neuroscience. 
+
+                                 //create a NetCon to activate the inhibitory synapse 
+                                 objref idrive
+                                 idrive = new NetStimm(0.5)
+                                 idrive.number = 1e+10
+                                 idrive.start = 100
+				 idrive.interval= 1000/I_frequency
+                                 idrive.noise = 1
+					
+
+                                 
+				 inc= new NetCon (idrive, Isynapse, 0,0.2,0) //the inhibitory synapse will be activated when the value of idrive is higher than 0, with a delay of 0 ms
+                                 inc.weight = 0.0076*number_of_inhibitory_synapse  //each inhibitory synapses has a conductance of 7.6 nS (0.0076 microS)
+				*/
+				  }
+
+
+//destory all excitatory synapses by replacing them with a IClamp obj with an amplitude of 0
+proc collapse_E_synapse()         {collapse=20  
+				  destory =0  //destory and collapse are used exclusively in this function
+				  objref synapse[collapse]
+				  access soma
+				  for destroy=0, collapse-1 {synapse[destroy]=new IClamp(0.5)
+							   synapse[destory].del=100
+						           synapse[destroy].dur=0
+				                           synapse[destroy].amp=0}
+				 synapse_segment=new Vector(collapse,0)
+			         synapse_location= new Vector(collapse,0)
+                            
+				}
+
+//destory all inhibitory synapses by setting netcon.weight of inhibitory synapsesto 0
+
+proc collapse_I_synapse() 	{access soma
+							Isynapse = new shunt(0.5)
+							Isynapse.del=0
+							Isynapse.dur=tstop
+							Isynapse.e=-75
+							Isynapse.g=0
+
+				 /*
+				 Isynapse = new Exp2Syn(0.5)
+				 Isynapse.e= -75 //the reversal potential is -75 mV
+                                 Isynapse.tau1 = 0.17 //defines the time constant of the IPSG upstroke
+                                 Isynapse.tau2= 1.8 //defines the time constant of the ISPG downstroke. These values are based on Bartos and Jonas (2001) J Neuroscience. 
+
+                                 //create a NetCon to activate the inhibitory synapse 
+                                 objref idrive
+                                 idrive = new NetStimm(0.5)
+                                 idrive.number = 1e+10
+                                 idrive.start = 100
+								 idrive.interval= 1000/I_frequency
+                                 idrive.noise = 1
+					
+
+                                 
+				 inc= new NetCon (idrive, Isynapse, 0,0.2,0) //the inhibitory synapse will be activated when the value of idrive is higher than 0, with a delay of 0 ms
+                                 inc.weight = 0  
+								 */
+				 }
+
+
+//build_excitatory_synapses()
+//build_inhibitory_synapses()
+
+
+//--------------------------------------------------------
+
+//for b=0, number_of_synapse-1 enc[b].weight=0
+//inc.weight=0
+
+access soma
+objref I_inj
+I_inj = new IClamp(0.5)
+I_inj.del = 100
+I_inj.dur = stoptime-100
+
+
+
+objref APtime, recAP
+access soma
+APtime = new APCount(0.5)
+APtime.thresh = 0
+recAP = new Vector(5000,0)
+APtime.record(recAP)
+
+print "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
+//create two vectors to store the AP frequency and corresponding tonic current input
+objref F, I_input
+F = new Vector(50, 0)
+I_input = new Vector(50,0)
+
+//define a string for the name of the output file
+strdef fname, output_string
+objref I_O
+
+
+//create a function to produce the FI curve
+proc make_output_FI() {$o2 = new File()
+					   $o2.wopen($s1)
+					   for abcd=0, F.size-1 {sprint (output_string, "%g%s%g", I_input.x[abcd], " ", F.x[abcd]) $o2.printf(output_string) $o2.printf("\n")}
+					   $o2.close}
+
+
+//create a function to produce the location of exciatory synapses
+proc make_output_excsyn() {$o2 = new File()
+		       $o2.wopen($s1)
+		       //first, write down which segment in the apical dendrite
+		       synapse_segment.printf($o2)
+		       //second, write down the precise location inside each segment
+		       synapse_location.printf($o2)
+		       $o2.close}
+
+proc simulate() {
+F = new Vector(50,0)
+for drive = 0, 30 {	
+		   I_inj.amp = (0.75/30)*drive
+           init()
+		   access soma
+		   APtime = new APCount(0.5)
+		   APtime.thresh = 0
+           recAP = new Vector(5000,0)
+           APtime.record(recAP)
+		   run()
+		   F.x[drive]=0
+		   for reject=0, APtime.n-1 {if (recAP.x[reject]>100) {F.x[drive]=F.x[drive]+1}}
+                   
+		   F.x[drive]=F.x[drive]/(stoptime-100)*1000
+		   I_input.x[drive]=(0.75/30)*drive
+	       print "AP frequency = ", APtime.n/(stoptime-100)*1000
+		   if ((APtime.n/(stoptime-100)*1000)>250) {break}
+                   }
+
+//write the FI curve to the disk
+sprint (fname, "%s%g%s%g%s%g%s%g%s", "BC4FI_E_frequency=", E_frequency, "Hz, I_frequency=", I_frequency,"Hz, E_synapse=", number_of_synapse, ", I_synapse=", number_of_inhibitory_synapse, ".txt")
+make_output_FI(fname,I_O)
+//write the location of the excitatory synapse to the disk
+sprint (fname, "%s%g%s%g%s%g%s%g%s", "BC4Excitatory synapse location_E_frequency=", E_frequency, "Hz, I_frequency=", I_frequency,"Hz, E_synapse=", number_of_synapse, ", I_synapse=", number_of_inhibitory_synapse, ".txt")
+make_output_excsyn(fname, I_O)
+//build_excitatory_synapses()
+}
+
+for (number_of_synapse=0; number_of_synapse<=20; number_of_synapse=number_of_synapse+20){
+			     for (number_of_inhibitory_synapse=0; number_of_inhibitory_synapse<=35; number_of_inhibitory_synapse=number_of_inhibitory_synapse+35) {   
+								       if (number_of_synapse!=0) {build_excitatory_synapses()}
+							               if (number_of_synapse==0) {collapse_E_synapse()}
+								       if (number_of_inhibitory_synapse!=0) {build_inhibitory_synapses()}
+								       if (number_of_inhibitory_synapse==0) {collapse_I_synapse()}
+								       simulate()
+								        // print number_of_synapse
+									// print number_of_inhibitory_synapse
+                                                                     }
+		           }
