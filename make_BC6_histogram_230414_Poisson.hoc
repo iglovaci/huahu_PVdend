@@ -1,0 +1,90 @@
+/*
+
+****************************************************************************************************************************************************************
+*						To run, change anlysis to either 'control' or 'gain'							       *
+*							run the calcualte() funtion									       *
+* 					Output file: histogram of each trial, and the k value of all trials						       *
+*						    BC_k_value_contro.txt or BC_k_value_gain.txt							       *
+****************************************************************************************************************************************************************
+
+*/
+
+
+
+//The bin of the histogram is 2 ms
+sample = 2 //represents the 2-ms bin of the histograme
+duration = 1200 //represents the 1200-ms duration of the simulation
+ncell=200
+window = 200 //defines the duration of the analysis window
+total_trial = 6 //from 0 to 5
+
+strdef filename_input, filename_output, analysis, name
+objref f1, IO
+
+objref histogram, raster[ncell], k_matrix[11][10]
+
+for b=0, 10 {for a=1, 9 k_matrix[b][a]=new Vector(total_trial)}
+
+f1= new File()
+analysis="control"
+strdef title
+
+proc make_output_histogram()  {$o2 = new File()
+     			       $o2.wopen($s1)
+					   sprint (title,"%s%s",analysis, "_The histogram: each row represents the number of APs in a 2-ms window.\n")
+					   $o2.printf(title)
+					   $o2.printf("\n")
+					   for mm=0, histogram.size-1 {sprint (title,"%g%s%g%s", mm*2, " ",histogram.x[mm], "\n") $o2.printf(title)}
+					   $o2.printf("\n")
+      			       //histogram.printf($o2)
+   			       $o2.close}
+
+number_of_AP=0
+
+
+
+
+
+
+proc calculate() {
+for (drive=.7; drive<=2.2; drive=drive+0.05) {
+for (var=0.1; var<=0.5; var=var+.02){
+
+
+				 for (trial=0; trial<=0; trial=trial+1) {number_of_AP=0
+									count=0
+									sprint(filename_input,"%s%g%s%s%s%g%s%g%s", "230330_Drive_",drive,"_BC6_APtime_", analysis, "_var_", var,"_trial_", trial,".txt")
+
+						 			
+						 			f1.ropen(filename_input)
+
+						 
+						 			histogram = new Vector(duration/sample+1, 0)
+						 			while (f1.eof()!=1) {APtime=f1.scanvar() count=count+1
+					         		     			     if (APtime!=0) {histogram.x[APtime/2]=histogram.x[APtime/2]+1
+													     //if (APtime>duration-window) {number_of_AP=number_of_AP+1} //calculate the total number of APs in the analysis window
+													     }
+                  			         					     }
+									f1.close()
+									//print number_of_AP
+									
+						 			sprint(filename_output,"%s%g%s%s%s%g%s%g%s", "Drive_",drive, "_BC6_histogram_", analysis, "_var_", var,"_trial_", trial,"_230330.txt")
+					         		make_output_histogram (filename_output, IO)
+									
+					        		 }
+					}
+
+}
+
+}
+calculate()
+
+analysis="gain"
+
+calculate()
+
+analysis="tonic"
+
+calculate()
+
+

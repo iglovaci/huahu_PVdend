@@ -1,0 +1,23 @@
+objref BCV[ncell]
+
+proc rec_BCV(){local i
+			   objref BCV[ncell]
+			   for i=0,ncell-1{BCV[i]=new Vector()
+							   access BC[i].soma
+BCV[i].record(&v(0.5))}}
+
+strdef write_string
+proc write_BCV(){local i, i1
+				 $o2=new File()
+				 $o2.wopen($s1)
+				 sprint (write_string, "%s", "Time,")
+                 for i=0, ncell-1 {sprint(write_string, "%s%s%g%s", write_string, "cell", i, ",")}	
+				 $o2.printf("%s\n", write_string)	
+				 
+				 for i=0, BCV[0].size-1{IO.printf("%g%s", i/1, ",")
+										for i1=0, ncell-1{$o2.printf("%f%s", BCV[i1].x[i], ",")}
+										$o2.printf("\n")}
+										$o2.close()
+					}
+											
+											
