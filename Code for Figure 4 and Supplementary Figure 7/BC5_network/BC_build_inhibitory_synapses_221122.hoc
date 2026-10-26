@@ -1,0 +1,60 @@
+//--------------------------------------------Create inhibitory synapses--------------------------------------------------------------------------------------
+objref msyn
+msyn = new Random (RNG_seed)
+
+
+objref presyn [ncell*ncell]    //define the netcon
+objref postsyn [ncell][ncell]  //define the inhibitory synapses
+objref postsynaptic_cell
+
+// i presynaptic
+// j postsynaptic
+IPSC_number=0  //IPSC_number represents the total numnber of inhibitory synapses between BCs in the network
+
+
+
+
+//*********************************************************************** Connection pattern 2******************************************************************************************
+objref connection_IO
+connection_IO = new File()
+strdef connection_file_name
+sprint (connection_file_name, "%s%s%s%s", prefix, "BC-to-BC_connections_",postfix,".txt")
+connection_IO.wopen(connection_file_name)
+
+
+
+IPSC_number=0
+//fore each presynaptic cell
+for i=0, ncell-1 {
+		// l = msyn.binomial (100, 0.57) // find the number of connected postsynatic cells based on a connecting probability of 0.57
+		 l=50 //50 cells on the left and 50 cell on the right
+		 for j=i-l, i+l        { 
+								if (j!=i) { if (msyn.binomial(1,.57)==1){
+											axdelay =abs(j-i)*50/(613)
+											s_delay = axdelay+0.5 //add the axon propagation delay to the synaptic delay
+											cell_number=j
+											if (j<0) {cell_number=ncell+j}
+											if (j>=ncell) {cell_number=j-ncell}
+											//print "presynaptic i =", i, "postsynaptic j =", cell_number
+											
+											//save connection pattern
+											connection_IO.printf("%s%g%s%g\n", "presynaptic BC = ", i, ", postsynaptic BC = ", cell_number)
+											
+											access BC[cell_number].soma
+											postsyn[i][cell_number] = new Exp2Syn(0.5)
+											postsyn[i] [cell_number].e =IPSG_reversal
+											postsyn[i] [cell_number].tau1 = 0.17
+											postsyn[i] [cell_number].tau2=1.8
+											access BC[i].soma
+											presyn[IPSC_number]= new NetCon(&v(0.5), postsyn[i][cell_number], 0, s_delay, IPSGsyn)
+											IPSC_number=IPSC_number+1}
+											}
+				
+		}
+		connection_IO.printf("\n\n")
+		
+	}
+
+connection_IO.close
+print IPSC_number
+	  

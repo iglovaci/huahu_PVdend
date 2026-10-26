@@ -1,0 +1,94 @@
+
+objref random_segment1,random_location1
+random_segment1= new Random (RNG_seed)
+random_location1=new Random (RNG_seed)
+basal_Compart=dend_number
+
+
+objref Poisson_input[ncell][200], Poisson_synapse[ncell][200], Poisson_synapse_net[ncell][200]//each cell has 100 excitatory synapses in distal basal dendrites.
+objref basal_segment, basal_location
+basal_segment=new Vector(200)
+basal_location=new Vector(200)
+for a1=0, 199 {access BC[0].soma
+			 distance(0, 0.5)
+			 basal_segment.x[a1] = random_segment1.discunif(0, basal_Compart-1)
+			 basal_location.x[a1] = random_location1.discunif(1, 99)/100
+			 access BC[0].dend[basal_segment.x[a1]]
+			 dis=distance (basal_location.x[a1])
+								  
+			 while ((dis<20)||(dis>100)) {	basal_segment.x[a1] = random_segment1.discunif(0, basal_Compart-1)
+											basal_location.x[a1] = random_location1.discunif(1, 99)/100
+											access BC[0].dend[basal_segment.x[a1]]
+											dis=distance (basal_location.x[a1])}
+											
+											
+											
+			 print dis
+			}
+
+print "sdddddddddddddddddddd"
+
+for a1=0, ncell-1 {
+				   access BC[a1].soma
+				   distance(0, 0.5)
+				   for b1=0, 199 {
+								  //print a1*100+b1
+								 // print "B1 =", b1, ", A1 = ", a1
+								  access BC[a1].dend[basal_segment.x[b1]]
+								  Poisson_synapse[a1][b1]= new Exp2Syn(basal_location.x[b1])
+								  Poisson_synapse[a1][b1].e=0
+								  Poisson_synapse[a1][b1].tau1=0.14
+								  Poisson_synapse[a1][b1].tau2=0.77  
+								  
+								  access BC[a1].dend[basal_segment.x[b1]]
+								  Poisson_input[a1][b1]= new NetStimm(0.5)
+								  Poisson_input[a1][b1].number = 1e+100
+								  Poisson_input[a1][b1].start = 0
+								  Poisson_input[a1][b1].noise= 1 
+								  Poisson_input[a1][b1].interval =1000/100
+								  
+								  
+								  
+								  
+								  
+								  Poisson_synapse_net[a1][b1]=new NetCon(Poisson_input[0][b1], Poisson_synapse[a1][b1], 0, 0.2, 0)
+								  Poisson_synapse_net[a1][b1].weight=(5e-4)*1*0
+								   
+								  }
+								 
+								  }
+					
+objref Random_dela				
+
+objref Drive_on_list, Drive_on_tag, Number_of_active_synpase_each_cell
+Drive_on_list=new Vector(ncell,0)
+Drive_on_tag=new Vector(ncell,0)
+Number_of_active_synpase_each_cell=new Vector(ncell,0)
+proc make_Poisson_input() {for a1=0, ncell-1 {random_delay=random_I.normal(100,100*100*.5*.5)
+                                              while ((random_delay<0)||(random_delay>=200)) {random_delay=random_I.normal(100,100*100*.5*.5)}
+											  for b1=0, 199 {Poisson_input[a1][b1].start=random_delay-random_delay+1}
+											  Drive_on_list.x[a1]=random_delay/dt
+											  Drive_on_tag.x[a1]=0
+											  
+											  Poisson_frequency = $1
+											  
+											  for b1=0, 199 {Poisson_input[a1][b1].interval=1000/Poisson_frequency
+															 Poisson_synapse_net[a1][b1].weight=(5e-4)*1*0}
+															}
+											  Number_of_active_synpase_each_cell=new Vector(ncell,0)			
+											  
+											  for b1=0, 199 {random_active_synapse_number=random_I.normal(100, 100*100*$2*$2) 
+															 while ((random_active_synapse_number<0)||(random_active_synapse_number>199)) {random_active_synapse_number=random_I.normal(100, 100*100*$2*$2)}
+															 Number_of_active_synpase_each_cell.x[b1]=random_active_synapse_number
+															 }
+											  
+											  
+											  }
+//when using the Poission EPSP train from basal dendrites						  
+//BC1 threshold: 20 Hz 			(AP frequency = 120 Hz at the input frequency of 60 Hz)	
+//BC2 threshold: 45 Hz
+//BC3 threshold: 45 to 50 Hz (@45 Hz, the AP frequency is very low)
+//BC4 threshold: 60 Hz (@55 Hz, the AP frequency is very low)
+//BC5 threshold: 40 Hz
+//BC6 threshold: 60 Hz (@50 Hz, the AP frequency is very low)
+

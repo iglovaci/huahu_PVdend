@@ -1,0 +1,180 @@
+//ncell = 30  //(ncell has to be assigned earlier)
+apic_number = 92
+dend_number = 23
+axon_number = 901
+
+
+
+//_______________________________________________________________________Define the BC2 cell template (only the morphology)______________________________________________________________
+begintemplate Cell
+
+
+apic_seg = 92    
+dend_seg = 23
+axon_seg = 901
+
+
+
+public soma, axon, dend, apic
+
+objref pre_list
+
+//create soma, axon[axon_seg], dend[dend_seg], apic[apic_seg]
+
+
+xopen ("DG-BasketCell2_no_axon.hoc")
+
+objref AllNseg
+
+
+
+// define the number of segments, based on the Nseg_BC2.txt. This proc is embedded in the passive model hof file.
+//secdef()
+
+proc init() { pre_list = new List()
+	      topol()
+	      secdef()
+
+
+		//-----------------------
+
+
+//Here ax1, ax, de and ap valule must be assigned manually and matches that of axon_seg, dend_seg and apic_seg
+
+//**************************************************************************************************************************
+
+
+		ax=1  //here ax must be replace by ax1 becase ax=1 and ax1=901      //**************************************
+		ax1=901								    //**************************************
+		de=23 // number of dend sections (basal)			    //**************************************
+		ap=92 // number of apic sections (apical)    			    //**************************************
+
+
+
+//**************************************************************************************************************************
+
+//----------------------------------------------- defining nseg for each section ------------------------------------------
+
+		strdef NsegFile
+		NsegFile="Nseg_BC2.txt"
+		
+
+		AllNseg=new Vector(1+ax1+de+ap)
+		ropen(NsegFile)
+
+		for(i=0;i<AllNseg.size;i=i+1) {	AllNseg.x[i]=fscan()}
+
+   		soma.nseg = AllNseg.x[0]
+  		axon.nseg = AllNseg.x[1]
+   		//original code with axon:   for i=1,ax-1 axon[i].nseg = AllNseg.x[i+1]
+  	       //for i=1,ax-1 axon[i].nseg = AllNseg.x[i+1]
+
+  	
+  		dend.nseg = AllNseg.x[ax1+1]
+  		for i=1,de-1 dend[i].nseg = AllNseg.x[i+ax1+1]
+   		apic.nseg = AllNseg.x[ax1+de+1]
+ 	        for i=1,ap-1 apic[i].nseg = AllNseg.x[i+ax1+de+1]
+
+
+
+ 
+
+
+
+
+
+//------------------------------- Define biophysical properties---------------------------------------------------------------------------------------
+  	     
+
+	     forsec "soma" {insert hh_wbm gnabar_hh_wbm=0 gkbar_hh_wbm=0 gl_hh_wbm=1/6400} //Na+ and K+ conductances are initially set to 0.
+	     forsec "apic" {insert hh_wbm gnabar_hh_wbm=0 gkbar_hh_wbm=0 gl_hh_wbm=1/6400} //Na+ and K+ conductances are initially set to 0.
+	     forsec "dend" {insert hh_wbm gnabar_hh_wbm=0 gkbar_hh_wbm=0 gl_hh_wbm=1/6400} //Na+ and K+ conductances are initially set to 0.
+	     forsec "axon" {insert hh_wbm gnabar_hh_wbm=0 gkbar_hh_wbm=0 gl_hh_wbm=1/6400} //Na+ and K+ conductances are initially set to 0.
+
+             //the leak condutance was 1/6400 S cm-2 (Hu and Jonas 2010, Science supplementary).
+	     //Defined the reversal potential of the leak conductance (defining the RMP).
+	     forsec "soma" {el_hh_wbm = -70 Ra = 137 cm =1.06}
+	     forsec "apic" {el_hh_wbm = -70 Ra = 137 cm =1.06}
+	     forsec "dend" {el_hh_wbm = -70 Ra = 137 cm =1.06}
+	     forsec "axon" {el_hh_wbm = -70 Ra = 137 cm =1.06}
+	     //axialresist = 137, Hu and Jonas,supplementary (ohm cm).
+	     //membranecap = 1.06, membrane capacity based on AN 2010 PNAS units: uF cm-2
+	     dborder = 120  // 120 micrometers is border between proximal and distal dendrites, define distal versus proximal dendrites
+	     access soma
+	     dis = distance(0, 0.5)
+             forsec "apic" for (x)  {dis = distance (x)
+					    	if (dis <= dborder) {gl_hh_wbm (x)= 1/6400}  else {gl_hh_wbm(x) = 1/12700}
+				    		}
+
+	     forsec "dend" for (x)  {dis = distance (x)
+					     	if (dis <= dborder) {gl_hh_wbm (x)= 1/6400}  else {gl_hh_wbm(x) = 1/12700}
+					   	}
+
+	     //A uniform density of 150e-4 mho cm-2, corresponding to 15 mS cm-2 
+	     forsec "soma" {gkbar_hh_wbm= 150e-4} 
+	     forsec "apic" {gkbar_hh_wbm= 150e-4} 
+	     forsec "dend" {gkbar_hh_wbm= 150e-4} 
+	     forsec "axon" {gkbar_hh_wbm= 150e-4} 
+
+
+
+
+	     forsec "soma" {gnabar_hh_wbm=1000e-4 }//correspoding to 100 mS cm-2 at the soma
+
+	     access soma 
+	     distance (0, 0.5)
+ 	     forsec "apic" {           
+	   		  		gnabar_hh_wbm = 50e-4 //distal dendrites, Na+ conductance 5 ms cm-2
+	   		  		for (x) { 
+				   	dis = distance(x)
+           		  	   	if (dis<dborder) {gnabar_hh_wbm(x)=500e-4}}// proximal dendrites, Na+ conductance 50 ms cm-2
+           			         }
+
+
+
+	     forsec "dend" {   
+	    		 		 gnabar_hh_wbm = 50e-4
+	    		 		 for (x) {
+			         	 dis = distance(x)
+            		                if (dis<dborder) {gnabar_hh_wbm(x)=500e-4}}
+          		  		}
+              access axon[0]
+	      gnabar_hh_wbm =(1500e-4)*1.25
+
+           
+}
+
+
+
+
+
+	   
+
+
+
+
+endtemplate Cell
+
+//--------------------------------------------------------------------------------
+
+
+
+
+
+//__________________________________________________________________Create BCs___________________________________________________________________________________________
+objref BC[ncell]
+for a=0, ncell-1 {BC[a]= new Cell()}
+
+
+
+//___________________________________________The definition of individual cells has been performed________________________________________________________
+
+
+
+
+
+
+
+
+
+

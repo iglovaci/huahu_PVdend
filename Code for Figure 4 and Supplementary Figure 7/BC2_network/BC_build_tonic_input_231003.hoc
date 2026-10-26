@@ -1,0 +1,92 @@
+tonic_excitatory_g =  (4.25e-2)*1.1 //(nS)= 4.675-5 uS).
+
+
+
+
+//build random excitatory synapses in distal apical dendrites
+print "Assign random synapses"
+objref synapse[ncell][number_of_synapse] 
+a = 0
+objref synapse_segment, synapse_location, random_segment, random_location
+random_segment = new Random(RNG_seed)
+random_location = new Random(RNG_seed)
+
+//create a edrive stimulation protocol to activate the exciatory synapse 
+objref edrive[ncell]
+
+
+objref enc[ncell*number_of_synapse]//enc is the NetCon target for the edrive
+
+
+//build a function to randomly assign (number_of_synapse) to distal dendrites
+proc build_tonic_synapses() {
+total_e_synapse=0
+objref enc[ncell*number_of_synapse]//enc is the NetCon target for the edrive
+objref synapse[ncell][number_of_synapse] 
+
+
+for cell_number=0, ncell-1{
+//create a edrive stimulation protocol to activate the exciatory synapse 
+
+			BC[cell_number].apic[90] edrive[cell_number] = new NetStimm(0.5)
+			edrive[cell_number].number = 1e+10
+			edrive[cell_number].start = 0
+			edrive[cell_number].noise= 1 
+			edrive[cell_number].interval =1000/E_frequency
+
+			
+			
+			//make_synapse and make variables are used exclusively in this function
+			make_synapse=0
+			synapse_segment = new Vector(number_of_synapse, 0) //range 0 to number_of_synapse-1
+			synapse_location = new Vector(number_of_synapse, 0)
+			tag = 0
+			//print "test3"
+			//print "                                                                             "
+			// print "Distances of excitatory inputs"
+			while (make_synapse<number_of_synapse) {apical_segment = random_segment.discunif(0, apicalCompart-1)
+			      apical_location = random_location.discunif(1, 99)/100
+			      access BC[cell_number].soma 
+			      distance(0, 0.5)
+			      access BC[cell_number].apic[apical_segment]
+                              dis = distance (apical_location)
+                              //print apical_segment, synapse_segment.x[make_synapse], dis
+                              if (dis > dborder) {for count= 0, make_synapse {if (apical_segment==synapse_segment.x[count]) {tag = 1} //check whether the input targets the same dendritic branch
+							          //if there are redundancies, tag is set to 1
+								   }
+						  //print tag
+                                                  if (tag != 1) {synapse_segment.x[make_synapse]=apical_segment  
+					                       	synapse_location.x[make_synapse]=apical_location
+								
+								//print dis
+							        make_synapse = make_synapse+1}
+
+						  }		
+                    
+                                          	tag = 0
+			      }
+
+//print "Location of synapses: apical segment, position inside the segment"
+//if (cell_number==100) {for make_synapse=0, number_of_synapse-1 {print synapse_segment.x[make_synapse], synapse_location.x[make_synapse]}}
+
+//Build synapses
+		//print cell_number
+		for make=0, number_of_synapse-1 {        //print "test"
+						 access BC[cell_number].apic[synapse_segment.x[make]]
+						 //print "test2"
+			     			 synapse[cell_number][make]= new shunt(synapse_location.x[make])   
+			      			 synapse[cell_number][make].e=0
+			      			 synapse[cell_number][make].del=0
+			      		 	 synapse[cell_number][make].dur=stoptime
+						 synapse[cell_number][make].g=tonic_excitatory_g
+
+
+						  total_e_synapse=total_e_synapse+1
+						 }
+//connect these synapses to a NetCon for producing inputs
+
+ }
+}
+
+proc destroy_e_synapse() {for a=0, total_e_synapse-1 enc[a].weight=0}
+
