@@ -1,0 +1,33 @@
+
+./Conductance_220811.c: ../Conductance_220811.mod
+	@printf " -> $(C_GREEN)NMODL$(C_RESET) $<\\n"
+	(cd ".."; MODLUNIT=$(NRNUNITS) $(NOCMODL) Conductance_220811.mod -o "/fp/homes01/u01/ec-huah/MOD_220811/x86_64")
+
+./Conductance_220811.o: ./Conductance_220811.c
+	@printf " -> $(C_GREEN)Compiling$(C_RESET) $<\\n"
+	$(COMPILE) -I".." $(INCLUDES) -fPIC -c $< -o $@
+
+./gap.c: ../gap.mod
+	@printf " -> $(C_GREEN)NMODL$(C_RESET) $<\\n"
+	(cd ".."; MODLUNIT=$(NRNUNITS) $(NOCMODL) gap.mod -o "/fp/homes01/u01/ec-huah/MOD_220811/x86_64")
+
+./gap.o: ./gap.c
+	@printf " -> $(C_GREEN)Compiling$(C_RESET) $<\\n"
+	$(COMPILE) -I".." $(INCLUDES) -fPIC -c $< -o $@
+
+./nethhwbm.c: ../nethhwbm.mod
+	@printf " -> $(C_GREEN)NMODL$(C_RESET) $<\\n"
+	(cd ".."; MODLUNIT=$(NRNUNITS) $(NOCMODL) nethhwbm.mod -o "/fp/homes01/u01/ec-huah/MOD_220811/x86_64")
+
+./nethhwbm.o: ./nethhwbm.c
+	@printf " -> $(C_GREEN)Compiling$(C_RESET) $<\\n"
+	$(COMPILE) -I".." $(INCLUDES) -fPIC -c $< -o $@
+
+./netstimm.c: ../netstimm.mod
+	@printf " -> $(C_GREEN)NMODL$(C_RESET) $<\\n"
+	(cd ".."; MODLUNIT=$(NRNUNITS) $(NOCMODL) netstimm.mod -o "/fp/homes01/u01/ec-huah/MOD_220811/x86_64")
+
+./netstimm.o: ./netstimm.c
+	@printf " -> $(C_GREEN)Compiling$(C_RESET) $<\\n"
+	$(COMPILE) -I".." $(INCLUDES) -fPIC -c $< -o $@
+
