@@ -1,0 +1,324 @@
+
+//ncell=200
+
+// insert gap junctions
+
+
+//*****************************************************************************          start of the gap junction section                                       ******************************************************************************************
+
+// insert gap junctions
+objref gaps [ncell][ncell][2]
+apic_number = 663
+dend_number = 71
+axon_number = 2419
+apic_distance = 0
+dend_distance=0
+
+
+apic_distance = 0
+dend_distance=0
+
+
+access BC[0].soma
+distance (0, 0.5)
+for a=0, apic_number-1 {	access BC[0].apic[a] 
+			if (apic_distance<=distance(0.5)) {apic_distance=distance(0.5)}
+			}
+
+
+for a=0, dend_number-1 {access BC[0].dend[a] 
+			if (dend_distance<=distance(0.5)) {dend_distance=distance(0.5)}
+			}
+
+
+total_distance=apic_distance+dend_distance  //total_distance represents the maximal distance from the tip of basal dendrites to the tip of apical dendrites
+
+//print apic_distance, dend_distance, total_distance
+
+objref gap_r
+gap_r = new Random(RNG_seed)
+
+
+strdef pregap_str, postgap_str
+objref gap_list[ncell]
+for j=0, ncell-1 gap_list[j]=new Vector(ncell, 0)
+//***********************************************************************************************************************************************************************
+proc make_gap_junction () {number_of_gap = 0
+						  for j = 0, (ncell-1) {l = 4 
+												for i1=j-l, j+l { 
+																 if (j!=i1) {if (msyn.binomial (1, 0.5)==1) {i=i1
+																											 if (i1<0) {i=ncell+i1}
+																											 if (i1>=ncell) {i=i1-ncell}
+												                                                             //check redundancy  cell199->cell 1 is the same as cell1->cell199 (redundant)
+																											if (gap_list[i].x[j]==0) {gap_list[j].x[i]=1
+																										    k=abs(i-j)
+																											if (k>=ncell-4) k=abs(k-ncell)
+																											print j, "    ---     ", i, "   ", k
+																	   
+																											find_gap_site(i, j)  
+												
+														
+																																		}
+																				  
+																				 
+									//once the pre- and postsynaptic cells of the gap junction has been determined, use the find_gap_site to determine the subcellular position of the gap junction
+									            	}
+										}
+			 						}
+				}
+			  }
+		
+//--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+//    -------------------------------------------------------------find the gap junction site--------------------------------
+
+/*																									            *
+*******************************************************************************************************************************************************************************************************************************
+*																									            *
+* The somatodendritic domain is divided into three parts. Distance < dend_distance represents basal dendrites; distance = dend_distance represents the soma; distance > dend_distance represents apical dendrites.    *
+*																									            *
+*******************************************************************************************************************************************************************************************************************************
+*/
+
+
+
+proc find_gap_site(){pregap=gap_r.discunif(0, dend_distance+150) //the distance in the apical dendrite is confined to 150 micrometers (Fukuda T et al. JN, 2006)
+
+//soma-to-soma gap junctions
+		    if (pregap==dend_distance) {pregap_str="soma" postgap_str="soma"
+					            access BC[$2].soma  
+					            gaps[$2][$1] [0]= new gap (0.5)
+					            setpointer gaps [$2] [$1] [0].vgap, BC[$1].soma.v(0.5)
+					            access BC[$1].soma
+					            gaps[$2][$1] [1]= new gap (0.5)
+					            setpointer gaps [$2][$1][1].vgap, BC[$2].soma.v(0.5)
+					            number_of_gap = number_of_gap +1
+						}
+		     //the presynaptic site of the gap junction is a basal dendrite
+		   if (pregap<dend_distance)   {pregap_str ="dend" 
+			   	                pregap=gap_r.discunif(0, dend_number-1)  //pregap is defined as the presynaptic site of the gap junction
+					        access BC[$1].soma distance (0, 0.5)
+			   		        access BC[$1].dend[pregap]
+			    		        pregap_reference=distance(0.5)
+						while (pregap_reference>150) {pregap=gap_r.discunif(0, dend_number-1)
+										 access BC[$1].dend[pregap]
+			    		      					 pregap_reference=distance(0.5)}
+			                                   //print pregap_str
+
+/*
+
+distance = 0 (tip of basal dendrite)  ---------------------------------------> distance =  (soma) --------------------------> distance = total_distance(tip of apical dendrites)
+
+*/
+
+//randomly determine the postsynaptic site of gap junction (soma, apical or basal?). Distance == 0 is the tip of the basal dendrite. 
+//Given that tip of the basal dendrite is the reference, dend_distance-pregap_reference defines the distance from the reference point. 
+			  
+					        postgap=gap_r.discunif(0, dend_distance+150)
+			                        while (abs(dend_distance-pregap_reference-postgap)>50)  {postgap=gap_r.discunif(0, dend_distance+150)}
+
+
+/*
+
+distance = 0 (tip of basal dendrite)  ---------------------------------------> distance =  (soma) --------------------------> distance = total_distance(tip of apical dendrites)
+                                             !				!
+					 pregap                         !
+								      postgap
+
+*/
+
+
+
+//basal dendrite to soma gap junctions
+			  			    if (postgap==dend_distance) {postgap_str="soma"
+									        access BC[$2].soma   
+						      		                gaps[$2][$1] [0]= new gap (0.5)
+										setpointer gaps [$2] [$1] [0].vgap, BC[$1].dend[pregap].v(0.5)
+										access BC[$1].dend[pregap]
+										gaps[$2][$1] [1]= new gap (0.5)
+										setpointer gaps [$2][$1][1].vgap, BC[$2].soma.v(0.5)
+										number_of_gap = number_of_gap +1
+										}  //the postsynaptic site of the gap junction is the soma
+			   
+
+//basal to basal dendritic gap junctions
+//******************* find a basal dendrite with a distance similar from the soma as the postsynaptic site of the gap junction *******************************************************************************************
+						    if (postgap<dend_distance)  {postgap_str="dend"
+										 //print postgap_str
+										 
+										 postgap=gap_r.discunif(0, dend_number-1)
+                                                    			         access BC[$2].soma distance (0, 0.5)
+						              			 access BC[$2].dend[postgap]
+						              			 while ((abs(pregap_reference-distance(0.5))>50)||(distance(0.5)>150)) {postgap=gap_r.discunif(0, dend_number-1)
+												         			            		access BC[$2].dend[postgap]
+																						//print "stuck3"
+																						}
+									        access BC[$2].dend[postgap]  
+						      		                gaps[$2][$1] [0]= new gap (0.5)
+										setpointer gaps [$2] [$1] [0].vgap, BC[$1].dend[pregap].v(0.5)
+										access BC[$1].dend[pregap]
+										gaps[$2][$1] [1]= new gap (0.5)
+										setpointer gaps [$2][$1][1].vgap, BC[$2].dend[postgap].v(0.5)
+										number_of_gap = number_of_gap +1
+
+
+								
+						              }
+
+//basal dendrite to apical dendrite gap junctions
+//******************* find a apical dendrite with a distance similar from the soma as the postsynaptic site of the gap junction *******************************************************************************************
+			    if (postgap>dend_distance)   { postgap_str="apic"
+							//print postgap_str
+							postgap=gap_r.discunif(0, apic_number-1)
+						             access BC[$1].soma distance (0, 0.5)
+						             access BC[$1].dend[pregap] distance_pregap=distance(0.5)
+							access BC[$2].soma distance(0, 0.5)
+							access BC[$2].apic[postgap] distance_postgap=distance(0.5)
+						           //  while (((distance_pregap+distance_postgap)>50)|| (distance_postgap>150)) {pregap=gap_r.discunif(0, dend_number-1)
+								   
+								   while (distance_pregap>75){
+												          			       access BC[$1].soma distance (0, 0.5)
+												           			       access BC[$1].dend[pregap] distance_pregap=distance(0.5) 
+																		   //print "preeee"
+																		   }
+								  while (distance_postgap>150)			{			   
+												          			       postgap=gap_r.discunif(0, apic_number-1)
+												          			       access BC[$2].soma distance(0, 0.5)
+												           			       access BC[$2].apic[postgap] distance_postgap=distance(0.5)
+																		 //  print "postt"
+												       }
+									             access BC[$2].apic[postgap]  // the value of l determine the gap junction connectivity, 4 is half
+						      		                     gaps[$2][$1] [0]= new gap (0.5)
+										     setpointer gaps [$2] [$1] [0].vgap, BC[$1].dend[pregap].v(0.5)
+										     access BC[$1].dend[pregap]
+										     gaps[$2][$1] [1]= new gap (0.5)
+										     setpointer gaps [$2][$1][1].vgap, BC[$2].apic[postgap].v(0.5)
+										     number_of_gap = number_of_gap +1
+	
+			
+							}
+
+		     }  //Corresponds to "if (pregap<dend_distance)  {"
+//the presynaptic site of the gap junction is an apical dendrite
+		if (pregap>dend_distance) 	{pregap_str ="apic"
+			  			 pregap=gap_r.discunif(0, apic_number-1)  //pregap is defined as the presynaptic site of the gap junction
+			   			 access BC[$1].soma distance (0, 0.5)
+			   			 access BC[$1].apic[pregap]
+			  			 pregap_reference=distance(0.5)
+				                 while (pregap_reference>150) {pregap=gap_r.discunif(0, apic_number-1) 
+									       access BC[$1].apic[pregap]
+									       pregap_reference=distance(0.5)
+										  // print "stuck4"
+										   }
+						// print pregap_str
+			   
+			  			 postgap=gap_r.discunif(0, total_distance)
+			   			 while (abs(dend_distance+pregap_reference-postgap)>50)  {postgap=gap_r.discunif(0, total_distance)}
+			   
+//apical dendrite to soma gap junctions
+			 			  if (postgap==dend_distance) {postgap_str="soma"
+						          			          access BC[$2].soma   
+						        			          gaps[$2][$1] [0]= new gap (0.5)
+						         			          setpointer gaps [$2] [$1] [0].vgap, BC[$1].apic[pregap].v(0.5)
+						    			          access BC[$1].apic[pregap](0.5)
+						      			          gaps[$2][$1] [1]= new gap (0.5)
+						        			          setpointer gaps [$2][$1][1].vgap, BC[$2].soma.v(0.5)
+						         			          number_of_gap = number_of_gap +1
+										}  //the postsynaptic site of the gap junction is the soma
+
+//apical dendrite to basal dendrite gap junctions
+			  		             if (postgap<dend_distance)     {postgap_str="dend"
+						            			        //  print postgap_str
+						           
+						          			           access BC[$1].soma distance (0, 0.5)      					
+                                                       		            	           pregap = gap_r.discunif(0, apic_number-1)
+									                   access BC[$1].apic[pregap]
+									                   distance_pregap=distance(0.5)
+									                   postgap=gap_r.discunif(0, dend_number-1)
+									                   access BC[$2].soma distance(0, 0.5)
+						            			           access BC[$2].dend[postgap]
+						          			           distance_postgap = distance(0.5)
+   
+							//while (((distance_pregap+distance_postgap)>50)||(distance_postgap>150)) {pregap =gap_r.discunif(0, apic_number-1)
+							while (distance_pregap>150) {pregap =gap_r.discunif(0, apic_number-1)
+													access BC[$1].soma distance(0, 0.5)
+													access BC[$1].apic[pregap]
+													distance_pregap=distance(0.5)
+							
+							}
+							while (distance_postgap>75){
+													postgap=gap_r.discunif(0, dend_number-1)
+													//print pregap, "---", postgap
+													
+
+													access BC[$2].soma distance(0, 0.5)
+													access BC[$2].dend[postgap]
+													distance_postgap=distance(0.5)			
+																					//	print "stuck2"
+													}
+										//pre=apic; post=dend
+									             access BC[$2].dend[postgap]  // the value of l determine the gap junction connectivity, 4 is half
+						      		                           gaps[$2][$1] [0]= new gap (0.5)
+										setpointer gaps [$2] [$1] [0].vgap, BC[$1].apic[pregap].v(0.5)
+										access BC[$1].apic[pregap]
+										gaps[$2][$1] [1]= new gap (0.5)
+										setpointer gaps [$2][$1][1].vgap, BC[$2].dend[postgap].v(0.5)
+										number_of_gap = number_of_gap +1
+
+
+
+						           }
+
+//apical to apical dendritic gap junctions
+			   if (postgap>dend_distance)  {   postgap_str="apic"
+									//print postgap_str
+									 postgap=gap_r.discunif(0, apic_number-1)
+						             access BC[$2].soma distance (0, 0.5)
+						             access BC[$2].apic[postgap]
+						             //while ((abs(pregap_reference-distance(0.5))>50)||(distance(0.5)>150)) {postgap=gap_r.discunif(0, apic_number-1)
+									   while (abs(pregap_reference-distance(0.5))>50) {postgap=gap_r.discunif(0, apic_number-1)
+												     access BC[$2].apic[postgap]
+													 
+													// print "stuckkk  ", distance(0.5)
+													}
+							
+   //pre=apic; post= apic
+			 						             access BC[$2].apic[postgap]  // the value of l determine the gap junction connectivity, 4 is half
+						      		                     gaps[$2][$1] [0]= new gap (0.5)
+										setpointer gaps [$2] [$1] [0].vgap, BC[$1].apic[pregap].v(0.5)
+										access BC[$1].apic[pregap]
+										gaps[$2][$1] [1]= new gap (0.5)
+										setpointer gaps [$2][$1][1].vgap, BC[$2].apic[postgap].v(0.5)
+										number_of_gap = number_of_gap +1
+		       }
+
+			} //Corresponds to "if (pregap>dend_distance)  {"
+			   
+
+//print "-----------------------------------------------------------------------------------"
+}
+
+
+
+
+
+
+
+
+/*																									            *
+*******************************************************************************************************************************************************************************************************************************
+*																									            *
+* The somatodendritic domain is divided into three parts. Distance < dend_distance represents basal dendrites; distance = dend_distance represents the soma; distance > dend_distance represents apical dendrites.    *
+*																									            *
+*******************************************************************************************************************************************************************************************************************************
+*/
+
+
+make_gap_junction()
+
+print "number of gap junctions = ", number_of_gap
+
+//*****************************************************************************       end of  the gap junction section                                              ******************************************************************************************
+
+
+
