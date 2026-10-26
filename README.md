@@ -1,0 +1,1 @@
+"Sublinear integration in parvalbumin-expressing basket cell distal dendrites confers divisive gain modulation" by Iulia Glovaci, Anna Mihaly, Dohan Gruau, Fabian C. Roth and Hua Hu. 2026. (Manuscript code.) For further details, see Methods.
